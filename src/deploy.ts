@@ -28,6 +28,18 @@ const ROOT = resolve(import.meta.dir, "..");
 const DATA_DIR = resolve(ROOT, "data");
 const CONFIG_PATH = resolve(ROOT, "config.json");
 const PROFILE_DATA_PATH = resolve(ROOT, "profile-data.json");
+const ENV_PATH = resolve(ROOT, ".env");
+
+// Auto-load .env if it exists (so saved API tokens work across sessions)
+if (existsSync(ENV_PATH)) {
+  const envContent = readFileSync(ENV_PATH, "utf-8");
+  for (const line of envContent.split("\n")) {
+    const match = line.match(/^([A-Z_]+)=(.+)$/);
+    if (match && !process.env[match[1]]) {
+      process.env[match[1]] = match[2].trim();
+    }
+  }
+}
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -439,7 +451,25 @@ switch (command) {
 
   case "deploy":
   default: {
-    // Full pipeline: parse → deploy → verify
+    // Full pipeline: auto-setup (if needed) → parse → deploy → verify
+
+    // Auto-run setup if config is missing or has placeholder values
+    let config = loadConfig();
+    const needsSetup =
+      !config ||
+      !config.worker_name ||
+      config.worker_name === "living-resume-your-name";
+
+    const isCodespace = process.env.CODESPACES === "true";
+    const needsAuth =
+      isCodespace && !process.env.CLOUDFLARE_API_TOKEN;
+
+    if (needsSetup || needsAuth) {
+      console.log("\n  ℹ️  First time deploying — let's connect your Cloudflare account.\n");
+      const setupOk = await setup();
+      if (!setupOk) process.exit(1);
+    }
+
     const parseOk = await parse();
     if (!parseOk) process.exit(1);
 
@@ -450,7 +480,7 @@ switch (command) {
 
     console.log("━━━ Done ━━━\n");
     if (verifyOk) {
-      const config = loadConfig();
+      config = loadConfig();
       if (config) {
         console.log(`🎉 Your Living Resume API is live!`);
         console.log(`   ${`https://${config.worker_name}.workers.dev`}\n`);
