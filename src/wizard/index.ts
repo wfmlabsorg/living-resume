@@ -67,6 +67,57 @@ interface WizardData {
   domain: string[];
 }
 
+// ─── Escape Hatch ────────────────────────────────────────────────────────────
+
+/**
+ * Offers the user a chance to break out and edit TEMPLATE.md directly.
+ * Returns true if user chose to break out (template already saved), false to continue.
+ */
+async function offerEscapeHatch(
+  data: Partial<WizardData>,
+  completedSections: string[],
+  remainingSections: string[]
+): Promise<boolean> {
+  const choice = await p.select({
+    message: `You've completed: ${completedSections.join(', ')}.\n` +
+             `  Remaining: ${remainingSections.join(', ')}.\n` +
+             `  How do you want to continue?`,
+    options: [
+      { value: 'continue', label: 'Keep going with the wizard', hint: 'guided prompts for each section' },
+      { value: 'breakout', label: "I'll edit TEMPLATE.md myself", hint: 'saves progress, you fill in the rest' },
+    ]
+  });
+
+  if (p.isCancel(choice)) return true;
+
+  if (choice === 'breakout') {
+    const template = generateTemplateFromPartial(data);
+    const outputPath = resolve(process.cwd(), 'TEMPLATE.md');
+    writeFileSync(outputPath, template, 'utf-8');
+
+    // Save profile-data.json so deploy can generate config
+    if (data.name) {
+      const profileDataPath = resolve(process.cwd(), 'profile-data.json');
+      writeFileSync(profileDataPath, JSON.stringify({ name: data.name }, null, 2) + '\n');
+    }
+
+    p.outro(
+      pc.green('✓ Progress saved to TEMPLATE.md') + '\n\n' +
+      `Your answers are filled in. The remaining sections have examples\n` +
+      `you can replace with your own content.\n\n` +
+      `Sections to complete:\n` +
+      remainingSections.map(s => `  ${pc.yellow('→')} ${s}`).join('\n') + '\n\n' +
+      `Open ${pc.cyan('TEMPLATE.md')} in the editor (click it in the left sidebar)\n` +
+      `and replace the ${pc.yellow('← REPLACE THIS')} placeholder text.\n\n` +
+      `When you're done: ${pc.cyan('bun run deploy')}`
+    );
+
+    return true;
+  }
+
+  return false;
+}
+
 // ─── Main Wizard ─────────────────────────────────────────────────────────────
 
 async function runWizard(): Promise<WizardData | null> {
@@ -76,7 +127,8 @@ async function runWizard(): Promise<WizardData | null> {
 
   const shouldContinue = await p.confirm({
     message: 'Welcome! This wizard helps you build your Living Resume API profile.\n' +
-             '  It will take about 15-20 minutes. Ready to start?',
+             '  You can complete every section here, or break out and edit the\n' +
+             '  file directly at any checkpoint. Ready to start?',
     initialValue: true
   });
 
@@ -190,6 +242,14 @@ async function runWizard(): Promise<WizardData | null> {
   }) as string;
 
   if (p.isCancel(data.philosophy)) return null;
+
+  // ─── Checkpoint 1 ──────────────────────────────────────────────────────────
+
+  const breakout1 = await offerEscapeHatch(data,
+    ['Identity', 'Professional Story'],
+    ['What You Offer', 'Implications', 'Accomplishments', 'Track Record', 'Experience', 'Seeking', 'Cultural Fit', 'Skills']
+  );
+  if (breakout1) return null;
 
   // ─── Step 3: What You Offer ──────────────────────────────────────────────────
 
@@ -394,6 +454,14 @@ async function runWizard(): Promise<WizardData | null> {
       data.recognition.push(item);
     }
   }
+
+  // ─── Checkpoint 2 ──────────────────────────────────────────────────────────
+
+  const breakout2 = await offerEscapeHatch(data,
+    ['Identity', 'Story', 'Capabilities', 'Implications', 'Accomplishments'],
+    ['Track Record', 'Experience', 'Seeking', 'Cultural Fit', 'Skills']
+  );
+  if (breakout2) return null;
 
   // ─── Step 6: Track Record ────────────────────────────────────────────────────
 
@@ -799,6 +867,194 @@ async function runWizard(): Promise<WizardData | null> {
   return data as WizardData;
 }
 
+// ─── Generate Partial TEMPLATE.md (for escape hatch) ─────────────────────────
+
+const PH = '← REPLACE THIS'; // placeholder marker
+
+function generateTemplateFromPartial(data: Partial<WizardData>): string {
+  let t = '';
+
+  t += '# Living Resume API — Your Professional Profile\n\n';
+  t += '> Your wizard answers are filled in below. Replace any "← REPLACE THIS"\n';
+  t += '> placeholder with your own content, then run: bun run deploy\n\n';
+  t += '---\n\n';
+
+  // About
+  t += '## About\n\n';
+  t += `**Name:** ${data.name || `Your Name ${PH}`}\n\n`;
+  t += `**Preferred Name:** ${data.preferredName || `Your Nickname ${PH}`}\n\n`;
+  t += `**Title:** ${data.title || `VP, Your Specialty ${PH}`}\n\n`;
+  t += `**Location:** ${data.location || `City, State ${PH}`}\n\n`;
+  t += `**Core Thesis:**\n${data.coreThesis || `Your big idea about how your industry should work. ${PH}`}\n\n`;
+  t += `**The Moment:**\n${data.theMoment || `The experience that crystallized your thesis. ${PH}`}\n\n`;
+  t += '### What I Offer\n\n';
+  if (data.whatIOffer && data.whatIOffer.length > 0) {
+    for (const item of data.whatIOffer) {
+      t += `- **Title:** ${item.title}\n`;
+      t += `  **Description:** ${item.description}\n\n`;
+    }
+  } else {
+    t += `- **Title:** Capability Area 1 ${PH}\n`;
+    t += `  **Description:** What you deliver in this area ${PH}\n\n`;
+    t += `- **Title:** Capability Area 2 ${PH}\n`;
+    t += `  **Description:** What you deliver in this area ${PH}\n\n`;
+  }
+  t += '---\n\n';
+
+  // Narrative
+  t += '## Narrative\n\n';
+  t += `**Professional Narrative:**\n${data.professionalNarrative || `Your career story in 1-2 paragraphs. Not a list of jobs — how does each chapter build on the last? ${PH}`}\n\n`;
+  t += `**Philosophy:**\n${data.philosophy || `Your operating philosophy in 1-2 sentences. ${PH}`}\n\n`;
+  t += '---\n\n';
+
+  // Thesis
+  t += '## Thesis\n\n';
+  t += `**Core Thesis:**\n${data.coreThesis || `Same as About section. ${PH}`}\n\n`;
+  t += `**The Moment:**\n${data.theMoment || `Same as About section. ${PH}`}\n\n`;
+  t += '### Implications\n\n';
+  if (data.implications && data.implications.length > 0) {
+    for (const imp of data.implications) t += `- ${imp}\n`;
+  } else {
+    t += `- What follows logically from your thesis — implication 1 ${PH}\n`;
+    t += `- Another logical consequence of your worldview ${PH}\n`;
+  }
+  t += '\n---\n\n';
+
+  // Accomplishments
+  t += '## Accomplishments\n\n';
+  t += '### Financial Impact\n\n';
+  t += '| Accomplishment | Company | Value |\n';
+  t += '|----------------|---------|-------|\n';
+  if (data.financialImpact && data.financialImpact.length > 0) {
+    for (const item of data.financialImpact) {
+      t += `| ${item.accomplishment} | ${item.company} | ${item.value} |\n`;
+    }
+  } else {
+    t += `| What you did ${PH} | Company Name ${PH} | $X savings ${PH} |\n`;
+  }
+  t += '\n### Operational Scale\n\n';
+  if (data.operationalScale && data.operationalScale.length > 0) {
+    for (const item of data.operationalScale) t += `- ${item}\n`;
+  } else {
+    t += `- Scale metric, e.g. "Managed 5,000 agents across 8 centers" ${PH}\n`;
+  }
+  t += '\n### Recognition & Innovation\n\n';
+  if (data.recognition && data.recognition.length > 0) {
+    for (const item of data.recognition) t += `- ${item}\n`;
+  } else {
+    t += `- Awards, certifications, or publications ${PH}\n`;
+  }
+  t += '\n---\n\n';
+
+  // Track Record
+  t += '## Track Record\n\n';
+  t += '### Headline Stats\n\n';
+  t += '| Stat | Context |\n';
+  t += '|------|---------|\n';
+  if (data.headlineStats && data.headlineStats.length > 0) {
+    for (const item of data.headlineStats) {
+      t += `| ${item.stat} | ${item.context} |\n`;
+    }
+  } else {
+    t += `| $50M+ ${PH} | Total documented cost savings ${PH} |\n`;
+    t += `| 20+ years ${PH} | Industry experience ${PH} |\n`;
+  }
+  t += '\n---\n\n';
+
+  // Experience
+  t += '## Experience\n\n';
+  if (data.experience && data.experience.length > 0) {
+    for (let i = 0; i < data.experience.length; i++) {
+      const role = data.experience[i];
+      t += `### Role ${i + 1}${i === 0 ? ' (Most Recent)' : ''}\n\n`;
+      t += `- **Title:** ${role.title}\n`;
+      t += `- **Company:** ${role.company}\n`;
+      t += `- **Dates:** ${role.dates}\n`;
+      t += `- **Location:** ${role.location}\n`;
+      t += `- **Description:** ${role.description}\n`;
+      t += '- **Key Contributions:**\n';
+      for (const c of role.contributions) t += `  - ${c}\n`;
+      t += '\n';
+    }
+  } else {
+    t += `### Role 1 (Most Recent)\n\n`;
+    t += `- **Title:** Your Title ${PH}\n`;
+    t += `- **Company:** Company Name ${PH}\n`;
+    t += `- **Dates:** 2021 - Present ${PH}\n`;
+    t += `- **Location:** City, State ${PH}\n`;
+    t += `- **Description:** What you did in this role ${PH}\n`;
+    t += `- **Key Contributions:**\n`;
+    t += `  - Key achievement or contribution ${PH}\n`;
+    t += `  - Another key contribution ${PH}\n\n`;
+  }
+  t += '---\n\n';
+
+  // Seeking
+  t += '## Seeking\n\n';
+  t += '**Target Roles:**\n';
+  if (data.targetRoles && data.targetRoles.length > 0) {
+    for (const role of data.targetRoles) t += `- ${role}\n`;
+  } else {
+    t += `- VP, Your Specialty ${PH}\n`;
+    t += `- Another target title ${PH}\n`;
+  }
+  t += `\n**Reporting Relationship:**\n${data.reportingRelationship || `Who you expect to report to ${PH}`}\n\n`;
+  t += '### Organization Types\n\n';
+  t += '| Organization Type | What I Bring |\n';
+  t += '|-------------------|--------------|\n';
+  if (data.organizationTypes && data.organizationTypes.length > 0) {
+    for (const org of data.organizationTypes) {
+      t += `| ${org.type} | ${org.whatIBring} |\n`;
+    }
+  } else {
+    t += `| Fortune 500 ${PH} | What you bring to this type ${PH} |\n`;
+  }
+  t += `\n**Industry:**\n${data.industry || `Target industries ${PH}`}\n\n`;
+  t += '---\n\n';
+
+  // Cultural Fit
+  t += '## Cultural Fit\n\n';
+  t += '### I Thrive In\n\n';
+  if (data.thriveIn && data.thriveIn.length > 0) {
+    for (const env of data.thriveIn) t += `- ${env}\n`;
+  } else {
+    t += `- Environments where you do your best work ${PH}\n`;
+    t += `- Another environment trait ${PH}\n`;
+  }
+  t += '\n### Not Right For\n\n';
+  if (data.notRightFor && data.notRightFor.length > 0) {
+    for (const env of data.notRightFor) t += `- ${env}\n`;
+  } else {
+    t += `- Environments that aren't a good match ${PH}\n`;
+    t += `- Another environment to avoid ${PH}\n`;
+  }
+  t += '\n---\n\n';
+
+  // Skills
+  t += '## Skills\n\n';
+  t += '### Methodologies\n\n';
+  if (data.methodologies && data.methodologies.length > 0) {
+    for (const m of data.methodologies) t += `- ${m}\n`;
+  } else {
+    t += `- Six Sigma, Lean, etc. ${PH}\n`;
+  }
+  t += '\n### Technical\n\n';
+  if (data.technical && data.technical.length > 0) {
+    for (const tech of data.technical) t += `- ${tech}\n`;
+  } else {
+    t += `- Tools, languages, platforms ${PH}\n`;
+  }
+  t += '\n### Domain Expertise\n\n';
+  if (data.domain && data.domain.length > 0) {
+    for (const d of data.domain) t += `- ${d}\n`;
+  } else {
+    t += `- Your areas of deep knowledge ${PH}\n`;
+  }
+  t += '\n';
+
+  return t;
+}
+
 // ─── Generate TEMPLATE.md ────────────────────────────────────────────────────
 
 function generateTemplate(data: WizardData): string {
@@ -1007,15 +1263,18 @@ async function main() {
 
   writeFileSync(outputPath, template, 'utf-8');
 
+  // Also save profile-data.json for deploy's config generation
+  const profileDataPath = resolve(process.cwd(), 'profile-data.json');
+  writeFileSync(profileDataPath, JSON.stringify({ name: data.name }, null, 2) + '\n');
+
   p.outro(
     pc.green('✓ Success!') + '\n\n' +
     `Your Living Resume profile has been generated:\n` +
     `${pc.cyan(outputPath)}\n\n` +
     `Next steps:\n` +
     `1. Review and edit TEMPLATE.md if needed\n` +
-    `2. Run: ${pc.cyan('bun run src/parser/parse-profile.ts')}\n` +
-    `3. Deploy your Living Resume API\n\n` +
-    `${pc.dim('Learn more: https://github.com/wfmlabsorg/resume-kit')}`
+    `2. Run: ${pc.cyan('bun run deploy')} — builds and publishes your API\n\n` +
+    `${pc.dim('Tip: You can always edit TEMPLATE.md later and re-deploy.')}`
   );
 }
 
