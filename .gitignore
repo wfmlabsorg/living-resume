@@ -1,0 +1,9 @@
+node_modules/
+bun.lockb
+data/
+config.json
+profile-data.json
+.env
+.env.local
+dist/
+*.log

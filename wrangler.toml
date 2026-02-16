@@ -1,0 +1,9 @@
+# Living Resume API — Cloudflare Worker Configuration
+#
+# Replace "living-resume-your-name" with your actual worker name.
+# This should match the worker_name in your config.json.
+# Run `bun run setup` to configure this automatically.
+
+name = "living-resume-your-name"
+main = "src/worker/index.ts"
+compatibility_date = "2024-12-01"

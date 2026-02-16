@@ -1,0 +1,24 @@
+{
+  "name": "living-resume-codespace-kit",
+  "version": "2.0.0",
+  "description": "Build your Living Resume API in a GitHub Codespace",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/wizard/index.ts",
+    "build": "bun run src/deploy.ts parse",
+    "preview": "bun run src/deploy.ts preview",
+    "setup": "bun run src/deploy.ts setup",
+    "deploy": "bun run src/deploy.ts deploy",
+    "verify": "bun run src/deploy.ts verify",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.9.2",
+    "@clack/core": "^0.3.4",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Wizard",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "start"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+    },
+    {
+      "label": "Build API",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "build"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Preview Locally",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "preview"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Deploy to Cloudflare",
+      "type": "shell",
+      "command": "bun",
+      "args": ["run", "deploy"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      }
+    }
+  ]
+}
