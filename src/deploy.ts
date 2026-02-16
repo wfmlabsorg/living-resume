@@ -11,7 +11,18 @@
 
 import { existsSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { parseTemplate, writeEndpointFiles } from "./parser/parse-profile";
+
+function promptUser(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
 
 const ROOT = resolve(import.meta.dir, "..");
 const DATA_DIR = resolve(ROOT, "data");
@@ -39,26 +50,73 @@ async function setup(): Promise<boolean> {
   console.log("\n━━━ Cloudflare Setup Wizard ━━━\n");
   console.log("This will help you set up your Cloudflare account and worker.\n");
 
-  // Step 1: Run wrangler login interactively
+  const isCodespace = process.env.CODESPACES === "true";
+
+  // Step 1: Authenticate with Cloudflare
   console.log("Step 1: Authenticating with Cloudflare...\n");
-  console.log("Running: wrangler login");
-  console.log("→ A browser window will open. Log in with your Cloudflare account.\n");
 
-  const loginProc = Bun.spawn(["npx", "wrangler", "login"], {
-    cwd: ROOT,
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
+  if (isCodespace) {
+    // Codespace: OAuth won't work (no browser), use API token instead
+    console.log("  ℹ️  Running in a GitHub Codespace — using API token authentication.\n");
+    console.log("  You need a Cloudflare API token. Here's how to get one:\n");
+    console.log("  1. Open this URL in your browser (on your computer, not in the Codespace):");
+    console.log("     https://dash.cloudflare.com/profile/api-tokens\n");
+    console.log('  2. Click "Create Token"');
+    console.log('  3. Find "Edit Cloudflare Workers" and click "Use template"');
+    console.log('  4. Under Account Resources, select your account');
+    console.log('  5. Click "Continue to summary" → "Create Token"');
+    console.log("  6. Copy the token (you'll only see it once)\n");
 
-  const loginExit = await loginProc.exited;
-  if (loginExit !== 0) {
-    console.error("\n❌ Cloudflare login failed.");
-    console.error("   Make sure you have a Cloudflare account at https://dash.cloudflare.com\n");
-    return false;
+    const token = await promptUser("  Paste your Cloudflare API token here: ");
+
+    if (!token) {
+      console.error("\n❌ No token provided. Run bun run setup again when you have your token.\n");
+      return false;
+    }
+
+    // Verify the token works
+    console.log("\n  Verifying token...");
+    const verifyRes = await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const verifyData = (await verifyRes.json()) as { success: boolean };
+
+    if (!verifyData.success) {
+      console.error("\n❌ Token verification failed. Make sure you copied the full token.");
+      console.error("   Go back to https://dash.cloudflare.com/profile/api-tokens and try again.\n");
+      return false;
+    }
+
+    console.log("  ✅ Token verified!\n");
+
+    // Write token to .env file so wrangler picks it up
+    const envPath = resolve(ROOT, ".env");
+    writeFileSync(envPath, `CLOUDFLARE_API_TOKEN=${token}\n`);
+    console.log("  ✅ Saved token to .env (wrangler will use it automatically)\n");
+
+    // Also set in process.env for any subsequent commands in this session
+    process.env.CLOUDFLARE_API_TOKEN = token;
+  } else {
+    // Local machine: use normal OAuth browser flow
+    console.log("Running: wrangler login");
+    console.log("→ A browser window will open. Log in with your Cloudflare account.\n");
+
+    const loginProc = Bun.spawn(["npx", "wrangler", "login"], {
+      cwd: ROOT,
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+
+    const loginExit = await loginProc.exited;
+    if (loginExit !== 0) {
+      console.error("\n❌ Cloudflare login failed.");
+      console.error("   Make sure you have a Cloudflare account at https://dash.cloudflare.com\n");
+      return false;
+    }
+
+    console.log("\n✅ Cloudflare authentication successful!\n");
   }
-
-  console.log("\n✅ Cloudflare authentication successful!\n");
 
   // Step 2: Help user create config.json
   console.log("Step 2: Creating config.json...\n");
