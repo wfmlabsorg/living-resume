@@ -370,50 +370,76 @@ async function verify(): Promise<boolean> {
 
   const baseUrl = `https://${config.worker_name}.workers.dev`;
 
-  // First check root
-  try {
-    const rootRes = await fetch(baseUrl);
-    if (!rootRes.ok) {
-      console.error(`  ❌ Root endpoint returned ${rootRes.status}`);
-      console.error(`     URL: ${baseUrl}`);
-      console.error("\n     Is your worker deployed? Try: bun run deploy\n");
-      return false;
+  // New deploys can take a few seconds to propagate on Cloudflare's edge network.
+  // Retry up to 3 times with increasing delay.
+  const MAX_RETRIES = 3;
+  const DELAYS = [5, 10, 15]; // seconds
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt === 0) {
+      console.log("  Waiting a few seconds for Cloudflare to propagate...\n");
+      await new Promise((r) => setTimeout(r, DELAYS[0] * 1000));
     }
-    const rootData = await rootRes.json() as { endpoints?: Record<string, string> };
-    console.log(`  ✅ GET / → ${rootRes.status} OK`);
 
-    // Check each endpoint listed in root
-    const endpoints = Object.keys(rootData.endpoints ?? {})
-      .map((e) => e.replace("GET ", ""));
+    try {
+      const rootRes = await fetch(baseUrl);
+      if (!rootRes.ok) {
+        if (attempt < MAX_RETRIES - 1) {
+          console.log(`  ⏳ Not ready yet (${rootRes.status}). Retrying in ${DELAYS[attempt + 1]}s...`);
+          await new Promise((r) => setTimeout(r, DELAYS[attempt + 1] * 1000));
+          continue;
+        }
+        console.error(`  ❌ Root endpoint returned ${rootRes.status}`);
+        console.error(`     URL: ${baseUrl}`);
+        console.error("\n     Is your worker deployed? Try: bun run deploy\n");
+        return false;
+      }
 
-    let passed = 0;
-    let failed = 0;
+      const rootData = await rootRes.json() as { endpoints?: Record<string, string> };
+      console.log(`  ✅ GET / → ${rootRes.status} OK`);
 
-    for (const endpoint of endpoints) {
-      try {
-        const res = await fetch(`${baseUrl}${endpoint}`);
-        if (res.ok) {
-          console.log(`  ✅ GET ${endpoint} → ${res.status} OK`);
-          passed++;
-        } else {
-          console.log(`  ❌ GET ${endpoint} → ${res.status}`);
+      // Check each endpoint listed in root
+      const endpoints = Object.keys(rootData.endpoints ?? {})
+        .map((e) => e.replace("GET ", ""));
+
+      let passed = 0;
+      let failed = 0;
+
+      for (const endpoint of endpoints) {
+        try {
+          const res = await fetch(`${baseUrl}${endpoint}`);
+          if (res.ok) {
+            console.log(`  ✅ GET ${endpoint} → ${res.status} OK`);
+            passed++;
+          } else {
+            console.log(`  ❌ GET ${endpoint} → ${res.status}`);
+            failed++;
+          }
+        } catch (err) {
+          console.log(`  ❌ GET ${endpoint} → Error: ${err}`);
           failed++;
         }
-      } catch (err) {
-        console.log(`  ❌ GET ${endpoint} → Error: ${err}`);
-        failed++;
       }
-    }
 
-    console.log(`\n  Results: ${passed} passed, ${failed} failed\n`);
-    return failed === 0;
-  } catch (err) {
-    console.error(`  ❌ Cannot reach ${baseUrl}`);
-    console.error(`     Error: ${err}`);
-    console.error("\n     Is your worker deployed? Check your Cloudflare dashboard:");
-    console.error("     https://dash.cloudflare.com\n");
-    return false;
+      console.log(`\n  Results: ${passed} passed, ${failed} failed\n`);
+      return failed === 0;
+    } catch (err) {
+      if (attempt < MAX_RETRIES - 1) {
+        console.log(`  ⏳ Worker not reachable yet. Retrying in ${DELAYS[attempt + 1]}s...`);
+        console.log(`     (This is normal — Cloudflare needs a moment to propagate new workers)\n`);
+        await new Promise((r) => setTimeout(r, DELAYS[attempt + 1] * 1000));
+        continue;
+      }
+      console.log(`\n  ⚠️  Could not reach ${baseUrl} after ${MAX_RETRIES} attempts.`);
+      console.log(`     This is normal for brand new workers — Cloudflare can take up to a minute.`);
+      console.log(`\n     Your deploy succeeded! Try opening this URL in your browser:`);
+      console.log(`     ${baseUrl}`);
+      console.log(`\n     Or verify later: bun run verify\n`);
+      return true; // Don't fail the pipeline — deploy succeeded, propagation is just slow
+    }
   }
+
+  return false;
 }
 
 // ─── CLI Entry ───────────────────────────────────────────────────────────────

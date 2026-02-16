@@ -8,34 +8,38 @@ Your Living Resume API runs free on Cloudflare Workers — 9 endpoints, always o
 
 ---
 
-## Quick Start (3 Steps)
+## 👉 You're Here — Two Commands to Go Live
 
-### 1. Use This Template
+> **Coming from the [step-by-step walkthrough](https://living-resume-api.netlify.app)?** Great — you've already created your copy and opened this Codespace. You're at **Step 4**. The terminal at the bottom of the screen is ready.
 
-Click the green **"Use this template"** button above, then **"Create a new repository"**. Name it whatever you like (e.g., `my-resume-api`).
-
-### 2. Open in Codespace
-
-From your new repo, click **Code → Codespaces → "Create codespace on main"**. Everything installs automatically — Node, Bun, Wrangler, all dependencies. Takes about 60 seconds.
-
-### 3. Run the Wizard
-
-When the terminal opens, run:
+### Step 1: Build your profile
 
 ```bash
 bun run start
 ```
 
-The interactive wizard walks you through each section of your profile — name, title, professional story, accomplishments, experience, skills, and more. It generates your `TEMPLATE.md` automatically.
+The interactive wizard walks you through each section — name, title, professional story, accomplishments, experience, skills. You can complete the whole thing in the wizard, or **break out at any checkpoint** and edit `TEMPLATE.md` directly in the sidebar.
 
-Then:
+### Step 2: Deploy your API
 
 ```bash
-bun run setup    # Connect your free Cloudflare account
-bun run deploy   # Parse, deploy, and verify — one command
+bun run deploy
 ```
 
-Your API is live. Share the URL.
+This single command handles everything:
+- **First time?** It walks you through connecting your free Cloudflare account (you'll paste an API token — [instructions appear inline](https://living-resume-api.netlify.app/#walkthrough))
+- Parses your `TEMPLATE.md` into structured JSON
+- Deploys to Cloudflare Workers
+- Verifies all endpoints are live
+
+When it finishes, you'll see your live URL:
+
+```
+🎉 Your Living Resume API is live!
+   https://living-resume-your-name.workers.dev
+```
+
+**That's it. Share the URL.**
 
 ---
 
@@ -86,31 +90,17 @@ Example response (`GET /about`):
 | Command | What It Does |
 |---------|-------------|
 | `bun run start` | Launch the interactive profile wizard |
-| `bun run build` | Parse `TEMPLATE.md` into JSON endpoint files |
+| `bun run deploy` | Full pipeline: setup + parse + deploy + verify |
 | `bun run preview` | Start a local dev server to test your API |
-| `bun run setup` | Connect your Cloudflare account + configure |
-| `bun run deploy` | Full pipeline: parse → deploy → verify |
+| `bun run build` | Parse `TEMPLATE.md` into JSON (without deploying) |
+| `bun run setup` | Connect Cloudflare account (deploy does this automatically) |
 | `bun run verify` | Check that all live endpoints are responding |
 
 ---
 
-## How It Works
+## Editing Your Profile Directly
 
-```
-TEMPLATE.md  →  Parser  →  JSON files  →  Cloudflare Worker  →  Live API
-  (your data)   (bun run build)  (data/)    (bun run deploy)    (*.workers.dev)
-```
-
-1. **You fill out your profile** — either via the wizard (`bun run start`) or by editing `TEMPLATE.md` directly
-2. **The parser** reads your template and generates one JSON file per endpoint in `data/`
-3. **The Cloudflare Worker** bundles those JSON files and serves them as a REST API
-4. **Deploy** pushes the worker to Cloudflare's edge network — free tier, no credit card required
-
----
-
-## Manual Editing
-
-Prefer to edit markdown directly instead of using the wizard? Edit `TEMPLATE.md` in the repo root. Each section maps to an API endpoint:
+Prefer markdown over the wizard? Edit `TEMPLATE.md` in the sidebar. Each section maps to an API endpoint:
 
 - `## About` → `/about`
 - `## Narrative` → `/narrative`
@@ -122,15 +112,9 @@ Prefer to edit markdown directly instead of using the wizard? Edit `TEMPLATE.md`
 - `## Cultural Fit` → `/cultural-fit`
 - `## Skills` → `/skills`
 
-Follow the field labels exactly (e.g., `**Name:**`, `**Title:**`). The parser reads these markers. Inline comments (`<!-- like this -->`) are stripped automatically.
+Follow the field labels exactly (e.g., `**Name:**`, `**Title:**`). The parser reads these markers.
 
-After editing:
-
-```bash
-bun run build     # Re-parse the template
-bun run preview   # Test locally
-bun run deploy    # Push to production
-```
+After editing, just run `bun run deploy`.
 
 ---
 
@@ -145,14 +129,15 @@ That's it. Your API updates in seconds.
 
 ---
 
-## Cloudflare Setup
+## Cloudflare Setup (for reference)
 
-You need a **free** Cloudflare account. No credit card required.
+`bun run deploy` handles this automatically on first run. But if you need to set it up manually:
 
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) and create an account
-2. Run `bun run setup` in your Codespace
-3. A browser window opens — log in with your Cloudflare credentials
-4. The setup script configures everything automatically
+1. Go to [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
+2. Click **"Create Token"**
+3. Use the **"Edit Cloudflare Workers"** template
+4. Select your account, click **"Continue to summary"** → **"Create Token"**
+5. Run `bun run setup` and paste your token when asked
 
 Your worker runs on Cloudflare's free tier (100,000 requests/day). For a personal resume API, you'll never hit that limit.
 
@@ -164,13 +149,13 @@ Your worker runs on Cloudflare's free tier (100,000 requests/day). For a persona
 → Run `bun run start` to generate `TEMPLATE.md` via the wizard, or create it manually.
 
 **"Worker name not configured"**
-→ Run `bun run setup` to create `config.json` and set your worker name.
+→ Run `bun run deploy` — it will walk you through setup automatically.
+
+**"Cannot reach" after deploy**
+→ Normal for brand new workers. Cloudflare can take up to a minute to propagate. Wait a moment and run `bun run verify`.
 
 **"Wrangler deploy failed"**
-→ Make sure you've logged in: `bun run setup`. Check your Cloudflare dashboard.
-
-**"Config name mismatch"**
-→ The `worker_name` in `config.json` must match the `name` in `wrangler.toml`. Run `bun run setup` to sync them.
+→ Your API token may have expired. Run `bun run setup` to re-authenticate.
 
 **Parser generates empty endpoints**
 → Check that your `TEMPLATE.md` has the correct section headings (`## About`, `## Experience`, etc.) and field markers (`**Name:**`, `**Title:**`).
@@ -183,17 +168,15 @@ Your worker runs on Cloudflare's free tier (100,000 requests/day). For a persona
 ├── .devcontainer/         # GitHub Codespace configuration
 │   ├── devcontainer.json  # Environment setup (Node, Bun, extensions)
 │   └── welcome.sh         # Terminal greeting on startup
-├── .vscode/               # VS Code tasks and extensions
 ├── src/
 │   ├── wizard/            # Interactive profile wizard
-│   │   └── index.ts       # Wizard entry point
+│   │   └── index.ts
 │   ├── parser/            # Template → JSON parser
 │   │   └── parse-profile.ts
 │   ├── worker/            # Cloudflare Worker API server
 │   │   └── index.ts
 │   └── deploy.ts          # Build/deploy orchestrator
 ├── TEMPLATE.md            # Your profile data (generated or hand-edited)
-├── config.example.json    # Example configuration
 ├── wrangler.toml          # Cloudflare Worker config
 └── package.json           # Scripts and dependencies
 ```
@@ -218,5 +201,7 @@ Learn more: [The Front Door is Broken](https://talentintel.wfmlabs.com) — an i
 ## Credits
 
 Built by [WFM Labs](https://wfmlabs.com). Based on the Living Resume API concept from Contact Center Compass Issue 21: "The Front Door is Broken."
+
+Full walkthrough: [living-resume-api.netlify.app](https://living-resume-api.netlify.app)
 
 **License:** MIT
