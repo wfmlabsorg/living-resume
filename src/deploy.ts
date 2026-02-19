@@ -1,6 +1,8 @@
 /**
  * deploy.ts — Living Resume API deploy orchestrator
  *
+ * FIXED 2026-02-19: Corrected subdomain handling for .tedlango.workers.dev URLs
+ *
  * Commands:
  *   bun run src/deploy.ts setup   → Interactive Cloudflare login & config setup
  *   bun run src/deploy.ts parse   → Parse TEMPLATE.md to JSON
@@ -54,6 +56,12 @@ function loadConfig(): Config | null {
     return null;
   }
   return JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+}
+
+// Helper function to construct correct worker URL with subdomain
+function getWorkerURL(workerName: string): string {
+  // For Ted's Cloudflare account, workers deploy to .tedlango.workers.dev
+  return `https://${workerName}.tedlango.workers.dev`;
 }
 
 // ─── Commands ────────────────────────────────────────────────────────────────
@@ -368,7 +376,7 @@ async function verify(): Promise<boolean> {
     return false;
   }
 
-  const baseUrl = `https://${config.worker_name}.workers.dev`;
+  const baseUrl = getWorkerURL(config.worker_name);
 
   // New deploys can take a few seconds to propagate on Cloudflare's edge network.
   // Retry up to 3 times with increasing delay.
@@ -448,6 +456,7 @@ const command = process.argv[2] || "deploy";
 
 console.log("╔══════════════════════════════════════╗");
 console.log("║   Living Resume API — Deploy Tool    ║");
+console.log("║   ✅ Fixed .tedlango subdomain issue  ║");
 console.log("╚══════════════════════════════════════╝");
 
 switch (command) {
@@ -509,7 +518,7 @@ switch (command) {
       config = loadConfig();
       if (config) {
         console.log(`🎉 Your Living Resume API is live!`);
-        console.log(`   ${`https://${config.worker_name}.workers.dev`}\n`);
+        console.log(`   ${getWorkerURL(config.worker_name)}\n`);
       }
     } else {
       console.log("⚠️  Deploy succeeded but some endpoints failed verification.");
